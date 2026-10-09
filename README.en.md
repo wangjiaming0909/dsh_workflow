@@ -66,7 +66,7 @@ Read-only execution dynamically intersects the parent Agent's visible catalog wi
 
 ## Development
 
-Keep the compatible DSH checkout at `../test-icetomoyo` or set `DSH_SNAPSHOT_DIR`.
+Keep the compatible DSH checkout at `../deepseek-harness` or set `DSH_SNAPSHOT_DIR`.
 
 ```sh
 pnpm install
