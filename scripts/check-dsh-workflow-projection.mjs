@@ -2,8 +2,10 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const snapshot = resolve(process.env.DSH_SNAPSHOT_DIR ?? '../test-icetomoyo')
-const runtimePath = resolve(snapshot, 'packages/client/runtime/lib/types/client/index.js')
+const snapshot = resolve(process.env.DSH_SNAPSHOT_DIR ?? '../deepseek-harness')
+// Import the assembler module rather than the package barrel: the barrel pulls
+// client component stylesheets, which plain Node cannot load.
+const runtimePath = resolve(snapshot, 'packages/client/ui-conversation/lib/types/client/conversation/assembler.js')
 const workflowPath = resolve(snapshot, 'packages/client/ui-workflow-run/lib/types/client/workflow-definition.js')
 for (const path of [runtimePath, workflowPath]) {
   if (!existsSync(path)) throw new Error(`DSH client build output is missing: ${path}`)
@@ -36,7 +38,7 @@ class ViewDefinitions {
   entries() { return [chatView] }
 }
 
-const input = (seq, type, data) => ({ event: { seq, time: seq * 100, type, data }, view: undefined })
+const input = (seq, type, data) => ({ type: 'event', event: { seq, time: seq * 100, type, data } })
 const assembler = new ConversationNodeAssembler(new EventDefinitions(), new ViewDefinitions())
 assembler.replaceWindow([
   input(1, 'turn/start', { turn: 1 }),
@@ -46,6 +48,7 @@ assembler.replaceWindow([
   input(5, 'step/end', { turn: 1, step: 1 }),
   input(6, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
 ], false)
+assembler.activateTarget('chat')
 assembler.flush()
 
 const data = () => [...assembler.snapshot('chat').nodes.values()][0]?.data

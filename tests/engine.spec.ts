@@ -11,7 +11,7 @@ import type { ResolvedWorkflowConfig, WorkflowDispatchAdapter, WorkflowModule, W
 import type { WorkflowVerificationAdapter, WorktreeIsolationAdapter } from '../src/types.js'
 
 function parent(cwd: string): Agent {
-  return { session: { header: { cwd }, events: [], append: vi.fn() }, ctx: { tools: { schemas: () => [{ name: 'read' }, { name: 'write' }, { name: 'shell' }] } } } as unknown as Agent
+  return { session: { header: { cwd }, snapshotEvents: () => [], append: vi.fn() }, ctx: { tools: { schemas: () => [{ name: 'read' }, { name: 'write' }, { name: 'shell' }] } } } as unknown as Agent
 }
 
 function config(overrides: Partial<ResolvedWorkflowConfig> = {}): ResolvedWorkflowConfig {
@@ -195,7 +195,7 @@ describe('dynamic workflow engine', () => {
   })
 
   it('repairs the real rc.2 error shape when native structured capture is missing', async () => {
-    const localAgent = { session: { events: [
+    const localAgent = { session: { snapshotEvents: () => [
       { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
       { type: 'step/start', seq: 1, time: 2, data: { turn: 1, step: 1 } },
       { type: 'step/end', seq: 2, time: 3, data: { turn: 1, step: 1, reason: { kind: 'completed' } } },
@@ -220,7 +220,7 @@ describe('dynamic workflow engine', () => {
     expect(ordinaryResult).toMatchObject({ status: 'completed', result: null, outcome: { status: 'partial' } })
     expect(ordinary.starts).toHaveBeenCalledTimes(1)
 
-    const localAgent = { session: { events: [
+    const localAgent = { session: { snapshotEvents: () => [
       { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
       { type: 'step/start', seq: 1, time: 2, data: { turn: 1, step: 1 } },
       { type: 'step/end', seq: 2, time: 3, data: { turn: 1, step: 1, reason: { kind: 'completed' } } },
@@ -375,9 +375,9 @@ describe('dynamic workflow engine', () => {
     let request!: SubagentStartRequest
     const events: unknown[] = [
       { type: 'tool/call', data: { callId: 'write-1', name: 'write', arguments: '{"path":"other.txt"}' } },
-      { type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'write-1', content: [{ type: 'text', text: 'ok' }] }] } } },
+      { type: 'tool/result', data: { message: { toolCallId: 'write-1', content: [{ type: 'text', text: 'ok' }] } } },
     ]
-    const localAgent = { session: { events }, followup: vi.fn(async () => {}), whenIdle: vi.fn(async () => {}), cancel: vi.fn(), steer: vi.fn() }
+    const localAgent = { session: { snapshotEvents: () => events }, followup: vi.fn(async () => {}), whenIdle: vi.fn(async () => {}), cancel: vi.fn(), steer: vi.fn() }
     const starts = vi.fn(async (_provider: string, input: SubagentStartRequest) => {
       request = input
       return {
@@ -467,7 +467,7 @@ describe('dynamic workflow engine', () => {
     const cancel = vi.fn()
     const dispose = vi.fn(async () => {})
     const child = {
-      session: { events: [{ type: 'assistant/message', data: { usage: { inputTokens: 3, outputTokens: 4 } } }] },
+      session: { snapshotEvents: () => [{ type: 'assistant/message', data: { usage: { inputTokens: 3, outputTokens: 4 } } }] },
       steer, cancel,
     }
     const starts = vi.fn(async (_provider: string, _request: SubagentStartRequest) => ({ id: 'child-live', localAgent: child, result: gate.then(() => ({ output: [{ type: 'text' as const, text: 'verified' }], structured: { ok: true }, stopReason: 'completed' as const })), dispose }))
@@ -519,11 +519,11 @@ describe('dynamic workflow engine', () => {
     const starts = vi.fn(async (_provider: string, request: SubagentStartRequest) => {
       const events: unknown[] = []
       const localAgent = {
-        session: { events },
+        session: { snapshotEvents: () => events },
         followup: vi.fn(() => {
           events.push(
             { type: 'tool/call', data: { callId: 'call-1', name: 'read', arguments: '{"path":"evidence.txt"}' } },
-            { type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'call-1', content: [{ type: 'text', text: 'ok' }] }] } } },
+            { type: 'tool/result', data: { message: { toolCallId: 'call-1', content: [{ type: 'text', text: 'ok' }] } } },
             { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'repaired final result' }] } } },
           )
           calls.push('followup')
@@ -563,7 +563,7 @@ describe('dynamic workflow engine', () => {
   it('preserves hard-verification final text, measured usage, and route facts on failure', async () => {
     const events: unknown[] = [{ type: 'assistant/message', data: { usage: { inputTokens: 5, outputTokens: 7 }, message: { content: [{ type: 'text', text: 'initial complete answer' }] } } }]
     const localAgent = {
-      session: { events },
+      session: { snapshotEvents: () => events },
       followup: vi.fn(() => { events.push({ type: 'assistant/message', data: { usage: { inputTokens: 1, outputTokens: 2 }, message: { content: [{ type: 'text', text: 'repaired but still rejected' }] } } }) }),
       whenIdle: vi.fn(async () => {}), cancel: vi.fn(), steer: vi.fn(),
     }
@@ -612,7 +612,7 @@ describe('dynamic workflow engine', () => {
     let settle!: (value: { output: { type: 'text'; text: string }[]; stopReason: 'aborted' }) => void
     const pending = new Promise<{ output: { type: 'text'; text: string }[]; stopReason: 'aborted' }>(resolve => { settle = resolve })
     const cancel = vi.fn(() => settle({ output: [{ type: 'text', text: 'cancelled' }], stopReason: 'aborted' }))
-    const starts = vi.fn(async () => ({ id: 'child-cancel', localAgent: { session: { events: [] }, cancel, steer: vi.fn() }, result: pending, dispose: vi.fn(async () => {}) }))
+    const starts = vi.fn(async () => ({ id: 'child-cancel', localAgent: { session: { snapshotEvents: () => [] }, cancel, steer: vi.fn() }, result: pending, dispose: vi.fn(async () => {}) }))
     const service = { getProvider: () => ({ name: 'spawn', capabilities: { outputSchema: true, depthLimit: true, toolFilter: true, persona: true }, inheritsParentContext: false }), start: starts } as unknown as SubagentRuntime
     const stopped = await fixture({ fake: { service, starts: starts as never }, source: `async function run(wf, args) { return await wf.runAgent({ name: 'cancel', prompt: 'cancel' }); }` })
     const active = await stopped.engine.start({ module: stopped.module, source: 'inline', parent: stopped.parent })

@@ -7,7 +7,8 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
 import { Context, Service } from '@deepseek-ai/cordis'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
-import SessionTitleService, { collectSessionTitleMessages } from '@deepseek-ai/dsh-session-title'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import SessionTitleService from '@deepseek-ai/dsh-session-title'
 import { describe, expect, it, vi } from 'vitest'
 import workflowPlugin, { apply, name, type Config } from '../src/index.js'
 import type { WorkflowRun, WorkflowRunSnapshot } from '../src/types.js'
@@ -106,7 +107,7 @@ describe('Cordis plugin entrypoint', () => {
     const subagents = await ctx.plugin(StubSubagents)
     const tools = await ctx.plugin(StubTools)
     const workflow = await ctx.plugin(workflowPlugin, { approvalMode: 'never' })
-    const liveAgent = { id: 'parent', ctx, session: { id: 'parent', header: { cwd: 'C:\\workspace' }, events: [], append: vi.fn() } } as unknown as Agent
+    const liveAgent = { id: 'parent', ctx, session: { id: 'parent', header: { cwd: 'C:\\workspace' }, snapshotEvents: () => [], append: vi.fn() } } as unknown as Agent
     const active = await ctx.dynamicWorkflows.startInline(liveAgent, {
       manifest: { name: 'active', description: 'active', phases: ['run'], readOnly: true, maxAgents: 1, maxConcurrency: 1, patterns: ['classify-and-act'] },
       execution: 'trusted-package', run: async wf => await wf.runAgent({ name: 'slow', prompt: 'wait', readOnly: true }),
@@ -167,7 +168,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     expect(await fx.command().handler({ agent: explicitAgent, rawInput: 'inspect then coordinate', signal: exec.signal }))
       .toMatchObject({ kind: 'success' })
@@ -191,7 +192,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'author then correct if needed', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -215,7 +216,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'author then correct runtime metadata', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -278,7 +279,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'author within global limits', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -294,7 +295,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'author with validated inputs', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -343,7 +344,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'author valid admissions', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -357,7 +358,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'run one selected branch', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -381,7 +382,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'run within the total token budget', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -406,7 +407,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'run sequential parallel lanes', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -425,7 +426,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'run sequential calls in one lane', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -441,7 +442,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'respect manifest concurrency', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -460,7 +461,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'allow a skipped lane', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -488,7 +489,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'stay within workflow budget', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -503,7 +504,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'run sequential pipeline stages', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -522,7 +523,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'respect pipeline concurrency', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -538,7 +539,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'spawn within parallel budget', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -557,7 +558,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'retain spawned reservation', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -575,7 +576,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'run nested parallel analysis', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -604,7 +605,7 @@ describe('Cordis plugin entrypoint', () => {
     fx.service.taskAdmissionServices.mockReturnValue({ resolveNested })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'run a nested workflow', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -632,7 +633,7 @@ describe('Cordis plugin entrypoint', () => {
     })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'run bounded nesting', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -660,7 +661,7 @@ describe('Cordis plugin entrypoint', () => {
     })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     const execute = fx.tools.find(tool => tool.name === 'run_workflow')!
     await fx.command().handler({ agent: explicitAgent, rawInput: 'run trusted nested parallel work', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
@@ -678,7 +679,7 @@ describe('Cordis plugin entrypoint', () => {
       args: {},
     }
     const forged = fixture({ approvalMode: 'generated-and-local' })
-    const forgedAgent = { session: { header: { cwd: 'C:\\workspace' }, events: [
+    const forgedAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => [
       { type: 'turn/start', data: { turn: 1 } },
       { type: 'user/message', data: { id: 'forged', source: { kind: 'user' } } },
     ] } } as unknown as Agent
@@ -690,7 +691,7 @@ describe('Cordis plugin entrypoint', () => {
       fx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
       const events: Array<{ type: string; data: Record<string, unknown> }> = []
       const steer = vi.fn()
-      const liveAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+      const liveAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
       await fx.command().handler({ agent: liveAgent, rawInput: `coordinate ${suffix}`, signal: exec.signal })
       const handoff = steer.mock.calls[0]![0] as { readonly id: string; readonly source: Record<string, unknown> }
       events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: handoff })
@@ -704,7 +705,7 @@ describe('Cordis plugin entrypoint', () => {
     requestFx.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const requestEvents: Array<{ type: string; data: Record<string, unknown> }> = []
     const requestSteer = vi.fn()
-    const requestAgent = { session: { header: { cwd: 'C:\\workspace' }, events: requestEvents }, inject: vi.fn(), steer: requestSteer } as unknown as Agent
+    const requestAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => requestEvents }, inject: vi.fn(), steer: requestSteer } as unknown as Agent
     await requestFx.command().handler({ agent: requestAgent, rawInput: 'coordinate inline only', signal: exec.signal })
     requestEvents.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: requestSteer.mock.calls[0]![0] })
     requestEvents.push({ type: 'user/message', data: { id: 'tool-context', source: { kind: 'plugin', plugin: 'scouting-tool', form: 'notice', summary: 'scouting evidence added' } } })
@@ -720,7 +721,7 @@ describe('Cordis plugin entrypoint', () => {
     always.service.list.mockResolvedValueOnce({ entries: [], diagnostics: [] })
     const events: Array<{ type: string; data: Record<string, unknown> }> = []
     const steer = vi.fn()
-    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, events }, inject: vi.fn(), steer } as unknown as Agent
+    const explicitAgent = { session: { header: { cwd: 'C:\\workspace' }, snapshotEvents: () => events }, inject: vi.fn(), steer } as unknown as Agent
     await always.command().handler({ agent: explicitAgent, rawInput: 'coordinate carefully', signal: exec.signal })
     events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: steer.mock.calls[0]![0] })
     const alwaysRun = always.tools.find(tool => tool.name === 'run_workflow')!
@@ -809,7 +810,7 @@ describe('Cordis plugin entrypoint', () => {
     expect(outcome).toMatchObject({ kind: 'success' })
     expect(fx.service.create).not.toHaveBeenCalled()
     expect(inject).toHaveBeenCalledOnce()
-    expect(inject.mock.calls[0]![0]).toMatchObject({ source: { kind: 'plugin', plugin: '@dsh-external/workflow', form: 'relay' } })
+    expect(inject.mock.calls[0]![0]).toMatchObject({ source: { kind: 'dsh-external-workflow', form: 'relay' } })
     expect((inject.mock.calls[0]![0] as { content: Array<{ text: string }> }).content[0]!.text).toContain('source + manifest (not request mode)')
     expect(steer).toHaveBeenCalledOnce()
     expect(steer.mock.calls[0]![0]).toMatchObject({ id: expect.any(String), source: { kind: 'user' }, content: [{ type: 'text', text: visibleRequest }] })
@@ -838,6 +839,7 @@ describe('Cordis plugin entrypoint', () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), 'dsh-workflow-command-lifecycle-'))
     const ctx = new Context()
     const sessions = await ctx.plugin(SessionStore)
+    const sessionProjections = await ctx.plugin(SessionProjectionRegistry)
     const sessionTitles = await ctx.plugin(SessionTitleService, { fallbackMaxWords: 12, fallbackMaxBytes: 120, maxTitleBytes: 120 })
     const commands = await ctx.plugin(CommandRuntime)
     const subagents = await ctx.plugin(StubSubagents)
@@ -862,23 +864,24 @@ describe('Cordis plugin entrypoint', () => {
       } as unknown as Agent
 
       const outcome = await Promise.race([
-        ctx.commands.execute(liveAgent, '/workflow inspect and coordinate', exec.signal),
+        ctx.commands.execute(liveAgent, '/workflow inspect and coordinate', [], exec.signal),
         new Promise<'timed-out'>(resolve => setTimeout(() => resolve('timed-out'), 250)),
       ])
       expect(outcome).not.toBe('timed-out')
-      expect(session.events.filter(event => event.type === 'command/run' || event.type === 'command/done').map(event => event.type))
+      expect(session.snapshotEvents().filter(event => event.type === 'command/run' || event.type === 'command/done').map(event => event.type))
         .toEqual(['command/run', 'command/done'])
-      const handoff = session.events.find(event => event.type === 'user/message' && event.data.source.kind === 'user')
+      const handoff = session.snapshotEvents().find(event => event.type === 'user/message' && event.data.source.kind === 'user')
       expect(handoff?.type === 'user/message' ? handoff.data.source : undefined)
         .toMatchObject({ kind: 'user' })
       expect(handoff?.type === 'user/message' ? handoff.data.content : undefined)
         .toEqual([{ type: 'text', text: 'inspect and coordinate' }])
-      expect(collectSessionTitleMessages(session.events)).toEqual([{ seq: handoff!.seq, text: 'inspect and coordinate' }])
       await vi.waitFor(() => { expect(ctx.sessionTitle.get(session)?.title).toBe('inspect and coordinate') })
-      const relay = session.events.find(event => event.type === 'agent/inbox/spliced')
+      // The title must be derived from the preserved human message, never from the relayed authoring contract.
+      expect(ctx.sessionTitle.get(session)?.messageSeqs).toEqual([handoff!.seq])
+      const relay = session.snapshotEvents().find(event => event.type === 'agent/inbox/spliced')
       expect(relay?.type === 'agent/inbox/spliced' ? relay.data.inserted[0]?.source : undefined)
-        .toMatchObject({ kind: 'plugin', plugin: '@dsh-external/workflow', form: 'relay' })
-      const context = session.events.find(event => event.type === 'user/message' && event.data.source.kind === 'plugin')
+        .toMatchObject({ kind: 'dsh-external-workflow', form: 'relay' })
+      const context = session.snapshotEvents().find(event => event.type === 'user/message' && event.data.source.kind === 'dsh-external-workflow')
       expect(context?.type === 'user/message' ? context.data.content[0] : undefined)
         .toMatchObject({ type: 'text', text: expect.stringContaining('source + manifest (not request mode)') })
 

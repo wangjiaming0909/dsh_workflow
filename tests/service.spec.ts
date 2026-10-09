@@ -22,7 +22,7 @@ function config(root: string): ResolvedWorkflowConfig {
 }
 
 function agent(cwd: string): Agent {
-  return { session: { id: 'parent', header: { cwd }, events: [], append: vi.fn() } } as unknown as Agent
+  return { session: { id: 'parent', header: { cwd }, snapshotEvents: () => [], append: vi.fn() } } as unknown as Agent
 }
 
 function authoredPayload() {

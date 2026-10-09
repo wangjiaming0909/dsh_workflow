@@ -117,7 +117,7 @@ function usageOf(agent: Agent | undefined): WorkflowTaskUsage | undefined {
   let outputTokens = 0
   let cacheReadTokens = 0
   let observed = false
-  for (const event of agent.session.events) {
+  for (const event of agent.session.snapshotEvents()) {
     if (event.type !== 'assistant/message' || event.data.usage === undefined) continue
     observed = true
     inputTokens += event.data.usage.inputTokens
@@ -199,14 +199,14 @@ function stringLeaves(value: unknown): string[] {
 function observedToolEvidence(agent: Agent | undefined): { readonly readPaths: readonly string[]; readonly mutationToolCalls: readonly string[] } {
   if (agent === undefined) return { readPaths: [], mutationToolCalls: [] }
   const successful = new Set<string>()
-  for (const event of agent.session.events) {
-    if (event.type !== 'tool/result' || event.data.error !== undefined) continue
-    for (const block of event.data.message.content) if (block.type === 'tool-result' && block.isError !== true) successful.add(String(block.toolCallId))
+  for (const event of agent.session.snapshotEvents()) {
+    if (event.type !== 'tool/result' || event.data.message.isError === true) continue
+    successful.add(String(event.data.message.toolCallId))
   }
   const readPaths: string[] = []
   const mutationToolCalls: string[] = []
   const mutationNames = new Set(['write', 'edit', 'str_replace_editor', 'bash', 'pwsh', 'terminal_create', 'terminal_write', 'cordis_mount', 'cordis_unmount'])
-  for (const event of agent.session.events) {
+  for (const event of agent.session.snapshotEvents()) {
     if (event.type !== 'tool/call' || !successful.has(String(event.data.callId))) continue
     if (mutationNames.has(event.data.name)) mutationToolCalls.push(event.data.name)
     if (!['read', 'read_image', 'grep', 'glob'].includes(event.data.name)) continue
@@ -225,7 +225,7 @@ function pathObserved(required: string, observed: readonly string[], cwd: string
 
 function latestAssistantText(agent: Agent | undefined, fallback: string): string {
   if (agent === undefined) return fallback
-  for (const event of [...agent.session.events].reverse()) {
+  for (const event of [...agent.session.snapshotEvents()].reverse()) {
     if (event.type !== 'assistant/message') continue
     const text = event.data.message?.content?.filter(block => block.type === 'text').map(block => block.text).join('\n') ?? ''
     if (text.length > 0) return text
@@ -235,7 +235,7 @@ function latestAssistantText(agent: Agent | undefined, fallback: string): string
 
 function childRecordedCompleted(agent: Agent | undefined): boolean {
   if (agent === undefined) return false
-  const end = [...agent.session.events].reverse().find(event => event.type === 'turn/end')
+  const end = [...agent.session.snapshotEvents()].reverse().find(event => event.type === 'turn/end')
   return end?.type === 'turn/end' && end.data.reason.kind === 'completed'
 }
 
@@ -916,7 +916,7 @@ export class DynamicWorkflowEngine {
       send: async (taskId, content) => {
         const task = this.expectTask(run, taskId)
         if (task.status !== 'running' || task.run?.localAgent === undefined) throw new Error(`task "${taskId}" does not support live messaging on its selected provider`)
-        task.run.localAgent.steer(createUserMessage({ content: [{ type: 'text', text: content }], source: { kind: 'plugin', plugin: '@dsh-external/workflow', form: 'relay' } }))
+        task.run.localAgent.steer(createUserMessage({ content: [{ type: 'text', text: content }], source: { kind: 'dsh-external-workflow', form: 'relay' } }))
         this.emit(run, 'agent-message', { taskId, content })
       },
       stop: async (taskId, reason) => {
@@ -1311,7 +1311,7 @@ export class DynamicWorkflowEngine {
           if (attempt === 2 || childRun.localAgent === undefined) throw new Error(`agent verification failed: ${reasons.join('; ')}`)
           childRun.localAgent.followup(createUserMessage({
             content: [{ type: 'text', text: `Verification failed. Repair the same task, then provide a complete final result.\n${reasons.map(reason => `- ${reason}`).join('\n')}` }],
-            source: { kind: 'plugin', plugin: '@dsh-external/workflow', form: 'relay' },
+            source: { kind: 'dsh-external-workflow', form: 'relay' },
           }))
           await childRun.localAgent.whenIdle()
           draft = { ...draft, finalText: latestAssistantText(childRun.localAgent, draft.finalText) }

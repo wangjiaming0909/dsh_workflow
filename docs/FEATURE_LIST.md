@@ -2,14 +2,15 @@
 
 ## Version Info
 
-- Current Release: v0.1.2
+- Current Release: v0.1.3
 - Planned Version: none
-- Last Updated: 2026-08-13
+- Last Updated: 2026-10-09
 
 ## Version Summary
 
 | Version | Status | Progress |
 | --- | --- | ---: |
+| v0.1.3 | Complete | 1/1 |
 | v0.1.2 | Complete | 1/1 |
 | v0.1.1 | Complete | 1/1 |
 | v0.1.0 | Complete | 1/1 |
@@ -21,6 +22,7 @@
 | 001 | KodaX-parity workflow orchestration | New | Critical | Complete | v0.1.0 | [Design](features/v0.1.0.md#feature_001-kodax-parity-workflow-orchestration) |
 | 002 | Visible workflow handoff and session title integration | Fix | High | Complete | v0.1.1 | [Design](features/v0.1.1.md#feature_002-visible-workflow-handoff-and-session-title-integration) |
 | 003 | Reliable handoff preflight and background lifecycle projection | Fix | Critical | Complete | v0.1.2 | [Design](features/v0.1.2.md#feature_003-reliable-handoff-preflight-and-background-lifecycle-projection) |
+| 004 | Load and run on the DSH 0.2.0-rc.2 release | Fix | Critical | Complete | v0.1.3 | [Design](features/v0.1.3.md#feature_004-load-and-run-on-the-dsh-020-rc2-release) |
 
 ## Feature Details
 
@@ -57,9 +59,20 @@
 - Started: 2026-08-13
 - Released: 2026-08-13
 
+### FEATURE_004: Load and run on the DSH 0.2.0-rc.2 release
+
+- Description: Accept the 0.2.0-rc.2 runtime at the plugin compatibility gate and migrate the Session, message-source, and job-ownership APIs the plugin uses, so the bundle mounts instead of being skipped.
+- Category: Fix
+- Priority: Critical
+- Status: Complete
+- Planned: v0.1.3
+- Created: 2026-10-09
+- Started: 2026-10-09
+- Released: 2026-10-09
+
 ## Summary
 
-- Total: 3
+- Total: 4
 - In Progress: 0
 - Planned: 0
-- Completed: 3
+- Completed: 4

@@ -1,6 +1,20 @@
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type { SubagentRun, SubagentRuntime, SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import type { ObjectJsonSchema, ToolRestriction } from '@deepseek-ai/dsh-tools'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    /**
+     * Context and steering this plugin relays into a session it owns or drives:
+     * the one-shot authoring contract handed to the calling Agent, live
+     * `wf.send` messages, and verification repair prompts. Relay form, because
+     * each one is a one-off account addressed to the receiving Agent rather
+     * than a snapshot that supersedes an earlier one.
+     */
+    'dsh-external-workflow': { readonly kind: 'dsh-external-workflow' } & ContextFormed
+  }
+}
 
 export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue }
